@@ -1,16 +1,96 @@
-# This is a sample Python script.
+import gymnasium as gym
+import sys
+import torch
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+from arguments import get_args
+from ppo import PPO
+from network import FeedForwardNN
+from eval_policy import eval_policy
+from enviornment import DeadlineAwareMetaReasoningEnv
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+def train(env, hyperparameters, actor_model=None, critic_model=None):
+    """
+    Trains the model.
+    :param env: the environment to train the policy on
+    :param hyperparameters: a dict of hyperparameters to use, defined in main
+    :param actor_model: the actor model to load in if we want to continue training
+    :param critic_model: the critic model to load in if we want to continue training
+    :return: None
+    """
+    print(f"Training", flush=True)
+
+    # Create a model for PPO
+    model = PPO(policy_class=FeedForwardNN, env=env, **hyperparameters)
+
+    # Loads in existing actor/critic model to continue training on
+    if actor_model != '' and critic_model != '':
+        print(f"Loading in {actor_model} and {critic_model}...", flush=True)
+    elif actor_model == '' or critic_model == '':
+        print(f"Error: Either specify both actor/critic models or none at all.")
+        sys.exit(0)
+    else:
+        print(f"Training from scratch.", flush=True)
+
+    # Train the PPO model with specified total timesteps
+    model.learn(total_timesteps=200_000_000)
 
 
-# Press the green button in the gutter to run the script.
+def test(env, actor_model):
+    """
+    Tests the model.
+    :param env: the environment to test the policy on
+    :param actor_model: the actor model to load in
+    :return: None
+    """
+    print(f"Testing {actor_model}", flush=True)
+
+    # Exit if actor model is not specified
+    if actor_model == '':
+        print(f"Didn't specify model file. Exiting", flush=True)
+        sys.exit(0)
+
+    # Extract out dimensions of observation and action spaces
+    obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.shape[0]
+
+    # Build policy from our NN defined in network
+    policy = FeedForwardNN(obs_dim, act_dim)
+
+    # Load in actor model saved by the PPO algorithm
+    policy.load_state_dict(torch.load(actor_model))
+
+    # Evaluate our policy with separate model, eval_policy
+    eval_policy(policy=policy, env=env, render=True)
+
+
+def main(args):
+    """
+    The main function to run.
+    :param args: the arguments passed in from the command line
+    :return: None
+    """
+    hyperparameters = {
+        'timesteps_per_batch': 2048,
+        'max_timesteps_per_episode': 200,
+        'gamma': 0.99,
+        'n_updates_per_iteration': 10,
+        'lr': 3e-4,
+        'clip': 0.2,
+        'render': True,
+        'render_every_i': 10
+    }
+
+    # Creates the environment that will be running
+    env = gym.make('MatrixMDP-v0')
+
+    # Train or test, specified through passed arguments
+    if args.mode == 'train':
+        train(env, hyperparameters=hyperparameters, actor_model=args.actor_model, critic_model=args.critic_model)
+    else:
+        test(env, actor_model=args.actor_model)
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    args = get_args()
+    main(args)
