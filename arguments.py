@@ -2,6 +2,11 @@ import argparse
 
 
 def get_args():
+    """
+    Parses arguments at command line
+    :return: None
+    """
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--mode', dest='mode', type=str, default='train')              # can be 'train' or 'test'
