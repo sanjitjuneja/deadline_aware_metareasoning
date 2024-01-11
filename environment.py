@@ -1,45 +1,112 @@
 import gymnasium as gym
 import numpy as np
 import scipy.stats as stats
-import matplotlib.pyplot as plt
 
 
 class DeadlineAwareMetaReasoningEnv(gym.Env):
     """
-    Custom Environment for Deadline-Aware Metareasoning.
-    This simulates a set of symbolic plans, each with a sequence of actions, under a deadline constraint.
+    Custom Gym Environment for Deadline-Aware Metareasoning
     """
-    metadata = {'render.modes': ['human', 'console']}
 
-    def __init__(self, num_plans, max_actions_per_plan, deadline):
+    def __init__(self, num_symbolic_plans, deadline):
+        """
+        Initializes the environment with the following parameters:
+        :param num_symbolic_plans: Number of symbolic plans to simulate (int)
+        :param deadline: Deadline for the episode (int)
+        """
         super(DeadlineAwareMetaReasoningEnv, self).__init__()
-        self.num_plans = num_plans
-        self.max_actions_per_plan = max_actions_per_plan
+        self.num_symbolic_plans = num_symbolic_plans
         self.deadline = deadline
 
+        # Initialize the planning and execution time distributions for each plan
         self._init_distributions()
 
-        self.action_space = gym.spaces.Discrete(self.num_plans)
+        # Actions represented by a discrete set where each action corresponds to choosing a plan to work on
+        self.action_space = gym.spaces.Discrete(self.num_symbolic_plans)
+
+        # Observations of states are represented by a Box space
         self.observation_space = gym.spaces.Box(
-            low=np.array([0] + [0]*self.num_plans + [0]*self.num_plans),
-            high=np.array([self.deadline] + [float('inf')]*self.num_plans + [self.max_actions_per_plan]*self.num_plans),
+            low=np.array([0, 0, 0, 0]),  # Lower bounds for ct, pti, eti, ri
+            high=np.array([self.deadline, np.inf, np.inf, self.num_symbolic_plans]),  # Upper bounds
             dtype=np.float32
         )
 
-        # Initialize history tracking
-        self.action_history = []
-        self.state_history = []
-        self.episode_count = 0
-        self.latest_action = -1
-
-        self.fig, self.ax = plt.subplots()
-
+        # Initializes starting state (ct, pti, eti, ri)
         self.state = self.reset()
 
+    def step(self, action):
+        """
+        Takes a step in the environment by choosing an action to work on
+        :param action: Selected symbolic plan to work on (int)
+        :return: New state (list), reward (float), done (bool)
+        """
+        # Get the planning and execution time for the chosen plan to work on (aka. action)
+        planning_time_distribution = self.planning_time_distributions[action][0]
+        planning_time = planning_time_distribution.ppf(np.random.rand())
+        execution_time_distribution = self.execution_time_distributions[action][0]
+        execution_time = execution_time_distribution.rvs()
+
+        # Update State (Timestep, Accumulated Planning Time, Accumulated Execution Time, Latest Symbolic Action)
+        self.state[0] += 1
+        self.state[1] += planning_time
+        self.state[2] += execution_time
+        self.state[3] = action
+
+        # Calculate reward and check if the episode is done
+        reward = self.calculate_reward()
+        done = True if reward in [0, 1] else False
+
+        # Return the new state, reward, and done
+        return self.state, reward, done
+
+    def reset(self):
+        """
+        Resets the environment to the initial state
+        :return: New state (list)
+        """
+        # Reset the state variables to their initial values
+        self.state = [0, 0.0, 0.0, 0]  # Resetting ct, pti, eti, ri
+        return self.state
+
+    def render(self, mode='console'):
+        """
+        Renders the current state of the environment
+        :param mode: Rendering mode, 'console' or human' (str)
+        :return: None
+        """
+        if mode == 'human':
+            pass
+        else:
+            print("-" * 50)
+            print(f"Current State: ")
+            print("Timestep: ", self.state[0])
+            print("Accumulated Planning Time: ", self.state[1])
+            print("Accumulated Execution Time: ", self.state[2])
+            print("Last Symbolic Action: ", self.state[3])
+            print("-" * 50)
+
+    def calculate_reward(self):
+        """
+        Helper Function: Calculates the reward for the current state
+        :return: Reward (float)
+        """
+        ct, pti, eti, ri = self.state
+        if ri == self.num_symbolic_plans and ct + eti <= self.deadline:
+            return 1  # Reward for completing all plans within the deadline
+        elif ct > self.deadline:
+            return 0 # Failure terminal state
+        else:
+            # Reward for making progress towards completing all plans
+            return 0.1 * (1 - (pti + eti) / self.deadline) + 0.9 * (1 - (pti + eti) / (self.deadline * self.num_symbolic_plans))
+
     def _init_distributions(self):
+        """
+        Helper Function: Initializes the planning and execution time distributions for each plan.
+        :return: None
+        """
         self.planning_time_distributions = []
         self.execution_time_distributions = []
-        for _ in range(self.num_plans):
+        for _ in range(self.num_symbolic_plans):
             plan_planning_times = []
             plan_execution_times = []
             for _ in range(self.max_actions_per_plan):
@@ -49,105 +116,3 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
                 plan_execution_times.append(stats.poisson(lambda_param))
             self.planning_time_distributions.append(plan_planning_times)
             self.execution_time_distributions.append(plan_execution_times)
-
-    def step(self, action):
-        self.state[0] += 1
-
-        planning_time_distribution = self.planning_time_distributions[action][0]
-        execution_time_distribution = self.execution_time_distributions[action][0]
-
-        # Generate planning time using inverse transform sampling
-        planning_time = planning_time_distribution.ppf(np.random.rand())
-
-        # Select execution time from Poisson distribution
-        execution_time = execution_time_distribution.rvs()
-
-        self.state[1 + action] += planning_time
-        self.state[1 + self.num_plans + action] += execution_time
-
-        # Check for completion of individual tasks and all tasks
-        task_completed = self.state[1 + self.num_plans + action] >= self.max_actions_per_plan
-        all_tasks_completed = all(
-            [self.state[1 + self.num_plans + i] >= self.max_actions_per_plan for i in range(self.num_plans)])
-
-        reward = 0
-
-        # Reward/Penalty Logic
-        if all_tasks_completed and self.state[0] <= self.deadline:
-            # Big bonus for completing all tasks within the deadline
-            reward += 20 + (self.deadline - self.state[0]) * 0.5  # Scaled bonus based on remaining time
-        elif self.state[0] > self.deadline:
-            # Heavy penalty for exceeding deadline
-            reward -= 15
-        else:
-            # Small penalty for each timestep to encourage efficiency
-            reward -= 0.1
-
-        if task_completed:
-            # Incremental reward for each task completed, scaled by speed
-            time_taken = self.state[1 + action]  # Example: time taken for the completed task
-            reward += max(5 - time_taken * 0.1, 1)  # Scaled reward for task completion
-
-        done = all_tasks_completed or self.state[0] > self.deadline
-
-        return self.state, reward, done, {}
-
-    def reset(self):
-        self.state = np.array([0] + [0.0] * self.num_plans + [0] * self.num_plans)
-        self.episode_count += 1
-        self.action_history = []
-        self.state_history = []
-        return self.state
-
-    def render(self, mode='console'):
-        if mode == 'console':
-            # Console rendering logic
-            pass
-            # print(f"Current State: {self.state}")
-
-        elif mode == 'human':
-            if self.episode_count == 0:
-                # Setup the plot for the first episode
-                plt.ion()
-                self.fig, self.ax = plt.subplots(2, 1, figsize=(10, 8))  # Two subplots for state and actions
-                plt.show()
-
-            self.update_graph(self.cumulative_rewards_graph, new_reward_data)
-            self.update_graph(self.actions_graph, new_action_data)
-
-            # Update history
-            self.action_history.append(self.latest_action)
-            self.state_history.append(self.state.copy())
-
-            # Clear previous content
-            self.ax.clear()
-            self.ax.clear()
-
-            # Plot state history
-            state_history_array = np.array(self.state_history)
-            for i in range(state_history_array.shape[1]):
-                self.ax.plot(state_history_array[:, i], label=f'State {i}')
-
-            # Plot action history
-            self.ax.stem(self.action_history)
-            self.ax.set_ylim(0, self.num_plans)
-            self.ax.set_ylabel('Actions')
-            self.ax.set_xlabel('Timestep')
-
-            # Add legends and titles
-            self.ax.legend(loc='upper left')
-            self.ax.set_title('State Over Time')
-            self.ax.set_title('Action History')
-
-            # Draw and pause
-            self.fig.canvas.draw()
-            plt.pause(0.001)
-
-            if self.check_for_pause():
-                self.pause_rendering()
-
-            if self.should_save_graphs():
-                self.save_graphs()
-
-    def close(self):
-        pass

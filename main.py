@@ -1,4 +1,5 @@
-import gymnasium as gym
+import os
+
 import sys
 import torch
 
@@ -44,7 +45,6 @@ def test(env, actor_model):
     :param actor_model: the actor model to load in
     :return: None
     """
-    device = torch.device("cpu")
 
     print(f"Testing {actor_model}", flush=True)
 
@@ -58,6 +58,10 @@ def test(env, actor_model):
     act_dim = env.action_space.n
 
     # Build policy from our NN defined in network
+    if os.environ.get('TORCH_DEVICE'):
+        device = torch.device(os.environ.get('TORCH_DEVICE'))
+    else:
+        device = torch.device('cpu')
     policy = FeedForwardNN(obs_dim, act_dim).to(device)
 
     # Load in actor model saved by the PPO algorithm

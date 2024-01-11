@@ -6,13 +6,13 @@
 
 import gymnasium as gym
 import time
+import os
 
 import numpy as np
 import time
 import torch
 import torch.nn as nn
 from torch.optim import Adam
-from torch.distributions import MultivariateNormal
 
 
 class PPO:
@@ -44,7 +44,10 @@ class PPO:
 		self.act_dim = env.action_space.n
 
 		 # Initialize actor and critic networks
-		self.device = torch.device("cpu")
+		if os.environ.get('TORCH_DEVICE'):
+			self.device = torch.device(os.environ.get('TORCH_DEVICE'))
+		else:
+			self.device = torch.device('cpu')
 		self.actor = policy_class(self.obs_dim, self.act_dim).to(self.device)                                                   # ALG STEP 1
 		self.critic = policy_class(self.obs_dim, 1).to(self.device)
 
