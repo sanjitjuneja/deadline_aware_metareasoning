@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 import scipy.stats as stats
+import matplotlib.pyplot as plt
 
 
 class DeadlineAwareMetaReasoningEnv(gym.Env):
@@ -41,9 +42,9 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
         :return: New state (list), reward (float), done (bool)
         """
         # Get the planning and execution time for the chosen plan to work on (aka. action)
-        planning_time_distribution = self.planning_time_distributions[action][0]
+        planning_time_distribution = self.planning_time_distributions[action]
         planning_time = planning_time_distribution.ppf(np.random.rand())
-        execution_time_distribution = self.execution_time_distributions[action][0]
+        execution_time_distribution = self.execution_time_distributions[action]
         execution_time = execution_time_distribution.rvs()
 
         # Update State (Timestep, Accumulated Planning Time, Accumulated Execution Time, Latest Symbolic Action)
@@ -54,7 +55,7 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
 
         # Calculate reward and check if the episode is done
         reward = self.calculate_reward()
-        done = True if reward in [0, 1] else False
+        done = True if reward == 0 or reward == 1 else False
 
         # Return the new state, reward, and done
         return self.state, reward, done
@@ -69,14 +70,42 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
         return self.state
 
     def render(self, mode='console'):
-        """
-        Renders the current state of the environment
-        :param mode: Rendering mode, 'console' or human' (str)
-        :return: None
-        """
         if mode == 'human':
-            pass
+            ct, pti, eti, ri = self.state
+
+            # Clearing previous figure and setting up new plots
+            plt.clf()
+
+            # Subplot for the Current Timestep vs Deadline
+            plt.subplot(2, 2, 1)
+            plt.bar(['Current Timestep', 'Deadline'], [ct, self.deadline], color=['blue', 'red'])
+            plt.title('Current Timestep vs Deadline')
+
+            # Subplot for Accumulated Planning and Execution Time
+            plt.subplot(2, 2, 2)
+            plt.bar(['Planning Time', 'Execution Time'], [pti, eti], color=['green', 'orange'])
+            plt.title('Accumulated Times')
+
+            # Subplot for Current Plan Index
+            plt.subplot(2, 2, 3)
+            plt.bar('Current Plan Index', ri, color='purple')
+            plt.title('Current Plan Index')
+            plt.xticks([])  # No x-ticks
+
+            # Subplot for Progress (ct relative to Deadline)
+            plt.subplot(2, 2, 4)
+            progress = ct / self.deadline
+            plt.bar('Progress', progress, color='cyan')
+            plt.title('Progress')
+            plt.xticks([])  # No x-ticks
+
+            plt.tight_layout()
+            plt.pause(0.1)  # Pause to update the plots
+
+            input("Press Enter to continue...")  # Wait for user input to proceed
+
         else:
+            # Console rendering logic
             print("-" * 50)
             print(f"Current State: ")
             print("Timestep: ", self.state[0])
@@ -86,33 +115,41 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
             print("-" * 50)
 
     def calculate_reward(self):
-        """
-        Helper Function: Calculates the reward for the current state
-        :return: Reward (float)
-        """
         ct, pti, eti, ri = self.state
-        if ri == self.num_symbolic_plans and ct + eti <= self.deadline:
-            return 1  # Reward for completing all plans within the deadline
-        elif ct > self.deadline:
-            return 0 # Failure terminal state
-        else:
-            # Reward for making progress towards completing all plans
-            return 0.1 * (1 - (pti + eti) / self.deadline) + 0.9 * (1 - (pti + eti) / (self.deadline * self.num_symbolic_plans))
+
+        # Reward for completing all plans within the deadline
+        if ri == self.num_symbolic_plans - 1 and ct + eti <= self.deadline:
+            return 1  # Maximum reward for full success
+
+        # No reward if the deadline is exceeded
+        if ct > self.deadline:
+            return 0
+
+        # Calculate proportional reward based on progress and time efficiency
+        # Ensure these values contribute less than 1 when combined
+        progress = ri / (self.num_symbolic_plans - 1)
+        time_efficiency = max(0, 1 - (ct + eti) / self.deadline)
+
+        # Balance the reward to be less than 1 for partial success
+        reward = 0.5 * progress + 0.5 * time_efficiency
+
+        # Ensure the reward is strictly less than 1 for incomplete tasks
+        return min(reward, 0.99)
 
     def _init_distributions(self):
         """
-        Helper Function: Initializes the planning and execution time distributions for each plan.
+        Helper Function: Initializes the planning and execution time distributions for each plan
         :return: None
         """
         self.planning_time_distributions = []
         self.execution_time_distributions = []
+
         for _ in range(self.num_symbolic_plans):
-            plan_planning_times = []
-            plan_execution_times = []
-            for _ in range(self.max_actions_per_plan):
-                mean, std = np.random.uniform(0.5, 2), np.random.uniform(0.1, 0.5)
-                plan_planning_times.append(stats.norm(mean, std))
-                lambda_param = np.random.uniform(1, 4)
-                plan_execution_times.append(stats.poisson(lambda_param))
-            self.planning_time_distributions.append(plan_planning_times)
-            self.execution_time_distributions.append(plan_execution_times)
+            # For simplicity, using a fixed distribution for planning and execution times per plan
+            mean_planning_time, std_dev_planning_time = 1.0, 0.5  # Example values
+            planning_distribution = stats.norm(mean_planning_time, std_dev_planning_time)
+            self.planning_time_distributions.append(planning_distribution)
+
+            lambda_execution_time = 2.0  # Example value for Poisson distribution
+            execution_distribution = stats.poisson(lambda_execution_time)
+            self.execution_time_distributions.append(execution_distribution)

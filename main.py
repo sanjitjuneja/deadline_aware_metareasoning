@@ -69,7 +69,7 @@ def test(env, actor_model):
     policy.to(device)
 
     # Evaluate our policy with separate model, eval_policy
-    eval_policy(policy=policy, env=env, render=True)
+    eval_policy(policy=policy, env=env, render=False)
 
 
 def main(args):
@@ -86,12 +86,12 @@ def main(args):
         'n_updates_per_iteration': 10,
         'lr': 2e-4,
         'clip': 0.2,
-        'render': True,
+        'render': False,
         'render_every_i': 10
     }
 
     # Creates the environment that will be running
-    env = DeadlineAwareMetaReasoningEnv(num_plans=3, max_actions_per_plan=5, deadline=10)
+    env = DeadlineAwareMetaReasoningEnv(num_symbolic_plans=3, deadline=10)
 
     # Train or test, specified through passed arguments
     if args.mode == 'train':

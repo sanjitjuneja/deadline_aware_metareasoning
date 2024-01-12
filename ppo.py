@@ -205,7 +205,7 @@ class PPO:
 				# Calculate action and make a step in the env. 
 				# Note that rew is short for reward.
 				action, log_prob = self.get_action(obs)
-				obs, rew, done, _ = self.env.step(action)
+				obs, rew, done = self.env.step(action)
 
 				# Track recent reward, action, and action log probability
 				ep_rews.append(rew)
@@ -346,7 +346,9 @@ class PPO:
 		t_so_far = self.logger['t_so_far']
 		i_so_far = self.logger['i_so_far']
 		avg_ep_lens = np.mean(self.logger['batch_lens'])
-		avg_ep_rews = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])
+		avg_ep_rews = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])/avg_ep_lens
+		num_episodes = len(self.logger['batch_lens'])
+		num_successful_episodes = np.sum([np.sum(ep_rews) == 1 for ep_rews in self.logger['batch_rews']])
 		avg_actor_loss = np.mean([losses.float().cpu().numpy().mean() for losses in self.logger['actor_losses']])
 
 		# Round decimal places for more aesthetic logging messages
@@ -357,8 +359,9 @@ class PPO:
 		# Print logging statements
 		print(flush=True)
 		print(f"-------------------- Iteration #{i_so_far} --------------------", flush=True)
-		print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
+		print(f"Successful Episode Ratio: {round(num_successful_episodes / num_episodes, 2)}", flush=True)
 		print(f"Average Episodic Return: {avg_ep_rews}", flush=True)
+		print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
 		print(f"Average Loss: {avg_actor_loss}", flush=True)
 		print(f"Timesteps So Far: {t_so_far}", flush=True)
 		print(f"Iteration took: {delta_t} secs", flush=True)
