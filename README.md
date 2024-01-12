@@ -1,6 +1,6 @@
 # Deadline-Aware Metareasoning PPO
 
-This project leverages Proximal Policy Optimization (PPO) to train an AI model in a custom reinforcement learning environment. The core challenge involves managing multiple symbolic plans with a strict deadline constraint, requiring the AI model to make strategic decisions to optimize plan execution under time pressure.
+This project leverages Proximal Policy Optimization (PPO) to train an AI model in a custom reinforcement learning environment based on deadline aware metareasoning. The core challenge involves managing multiple symbolic plans with a strict deadline constraint, requiring the AI model to make strategic decisions to optimize plan execution under time pressure.
 
 ## Project File Structure
 
