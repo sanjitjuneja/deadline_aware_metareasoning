@@ -70,41 +70,7 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
         return self.state
 
     def render(self, mode='console'):
-        if mode == 'human':
-            ct, pti, eti, ri = self.state
-
-            # Clearing previous figure and setting up new plots
-            plt.clf()
-
-            # Subplot for the Current Timestep vs Deadline
-            plt.subplot(2, 2, 1)
-            plt.bar(['Current Timestep', 'Deadline'], [ct, self.deadline], color=['blue', 'red'])
-            plt.title('Current Timestep vs Deadline')
-
-            # Subplot for Accumulated Planning and Execution Time
-            plt.subplot(2, 2, 2)
-            plt.bar(['Planning Time', 'Execution Time'], [pti, eti], color=['green', 'orange'])
-            plt.title('Accumulated Times')
-
-            # Subplot for Current Plan Index
-            plt.subplot(2, 2, 3)
-            plt.bar('Current Plan Index', ri, color='purple')
-            plt.title('Current Plan Index')
-            plt.xticks([])  # No x-ticks
-
-            # Subplot for Progress (ct relative to Deadline)
-            plt.subplot(2, 2, 4)
-            progress = ct / self.deadline
-            plt.bar('Progress', progress, color='cyan')
-            plt.title('Progress')
-            plt.xticks([])  # No x-ticks
-
-            plt.tight_layout()
-            plt.pause(0.1)  # Pause to update the plots
-
-            input("Press Enter to continue...")  # Wait for user input to proceed
-
-        else:
+        if mode == 'console':
             # Console rendering logic
             print("-" * 50)
             print(f"Current State: ")
@@ -113,6 +79,44 @@ class DeadlineAwareMetaReasoningEnv(gym.Env):
             print("Accumulated Execution Time: ", self.state[2])
             print("Last Symbolic Action: ", self.state[3])
             print("-" * 50)
+
+        elif mode == 'plot':
+            pass
+            # ct, pti, eti, ri = self.state
+            #
+            # # Clearing previous figure and setting up new plots
+            # plt.clf()
+            #
+            # # Subplot for the Current Timestep vs Deadline
+            # plt.subplot(2, 2, 1)
+            # plt.bar(['Current Timestep', 'Deadline'], [ct, self.deadline], color=['blue', 'red'])
+            # plt.title('Current Timestep vs Deadline')
+            #
+            # # Subplot for Accumulated Planning and Execution Time
+            # plt.subplot(2, 2, 2)
+            # plt.bar(['Planning Time', 'Execution Time'], [pti, eti], color=['green', 'orange'])
+            # plt.title('Accumulated Times')
+            #
+            # # Subplot for Current Plan Index
+            # plt.subplot(2, 2, 3)
+            # plt.bar('Current Plan Index', ri, color='purple')
+            # plt.title('Current Plan Index')
+            # plt.xticks([])  # No x-ticks
+            #
+            # # Subplot for Progress (ct relative to Deadline)
+            # plt.subplot(2, 2, 4)
+            # progress = ct / self.deadline
+            # plt.bar('Progress', progress, color='cyan')
+            # plt.title('Progress')
+            # plt.xticks([])  # No x-ticks
+            #
+            # plt.tight_layout()
+            # plt.pause(0.1)  # Pause to update the plots
+            #
+            # input("Press Enter to continue...")  # Wait for user input to proceed
+
+        else:
+            raise NotImplementedError
 
     def calculate_reward(self):
         ct, pti, eti, ri = self.state
